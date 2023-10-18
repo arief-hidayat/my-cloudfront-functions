@@ -7,73 +7,10 @@ var response401 = {
     statusCode: 401,
     statusDescription: 'Unauthorized'
 };
-function _sign(input, key, method) {
-    return crypto.createHmac(method, key).update(input).digest('base64url');
-}
 function _base64urlDecode(str) {
     return String.bytesFrom(str, 'base64url')
 }
-function _verify(input, key, method, type, signature) {
-    if(type === "hmac") {
-        var genSign = _sign(input, key, method);
-        if(signature === genSign) {
-            return true;
-        }
-        console.log("[" + signature + "] vs [" + genSign + "]")
-    }
-    return false;
-}
-function _verify_intsig(payload_jwt, intsig_key, method, type, sessionId, request_headers, request_querystrings) {
-    var indirect_attr = '';
-    if (payload_jwt['co']){
-        if (request_headers['cloudfront-viewer-country']){
-            indirect_attr += (request_headers['cloudfront-viewer-country'].value + ':');
-        } else if(payload_jwt['co_fallback']) {
-            console.log("Viewer country header missing but co_fallback set to true. Skipping internal signature verification");
-            return true;
-        } else {
-            throw new Error('intsig reference error: cloudfront-viewer-country header is missing');
-        }
-    }
-    if (payload_jwt['reg']){
-        if (request_headers['cloudfront-viewer-country-region']){
-            indirect_attr += (request_headers['cloudfront-viewer-country-region'].value + ':');
-        } else if(payload_jwt['reg_fallback']) {
-            console.log("Viewer country region header missing but reg_fallback set to true. Skipping internal signature verification");
-            return true;
-        } else {
-            throw new Error('intsig reference error: cloudfront-viewer-country-region header is missing');
-        }
-    }
-
-    if (payload_jwt['ssn']){
-        if (sessionId.length > 0){
-            indirect_attr += sessionId + ':';
-        } else {
-            throw new Error('intsig reference error: Session id is missing');
-        }
-    }
-
-    if(payload_jwt['headers']) payload_jwt.headers.forEach( attribute => {
-        if (request_headers[attribute]){
-            indirect_attr += (request_headers[attribute].value + ':' );
-        }
-    });
-
-    if(payload_jwt['qs']) payload_jwt.qs.forEach( attribute => {
-        if (request_querystrings[attribute]){
-            indirect_attr += (request_querystrings[attribute].value + ':' );
-        }
-    });
-    indirect_attr = indirect_attr.slice(0,-1);
-    if (indirect_attr && !_verify(indirect_attr, intsig_key, method, type, payload_jwt['intsig'])) {
-        console.log("Indirect attributes input string:[" + indirect_attr + "]");
-        return false;
-    } else {
-        return true;
-    }
-}
-function validate_token(request, noVerify) {
+function validate_token(request) {
     var pathArray = request.uri.split('/');
     //initial checks if token is present
     var token = pathArray[1];
@@ -86,40 +23,14 @@ function validate_token(request, noVerify) {
     }
     var headerSeg = segments[segments.length - 3];
     var payloadSeg = segments[segments.length - 2];
-    var signatureSeg = segments[segments.length - 1];
-    var session_id = segments.length === 4 ? segments[0] : '';
 
     var header = JSON.parse(_base64urlDecode(headerSeg));
     if(!header.kid) {
         throw new Error('Key id not found');
     }
-    var key = secrets[header.kid];
     var payload = JSON.parse(_base64urlDecode(payloadSeg));
     if(!payload['intsig']) {
         throw new Error('intsig not found');
-    }
-
-    if (!noVerify) {
-        var signingMethod = 'sha256';
-        var signingType = 'hmac';
-
-        // Verify signature. `sign` will return base64 string.
-        var signingInput = [headerSeg, payloadSeg].join('.');
-
-        if (!_verify(signingInput, key, signingMethod, signingType, signatureSeg)) {
-            throw new Error('Signature verification failed');
-        }
-        if (payload.nbf && Date.now() < payload.nbf*1000) {
-            throw new Error('Token not yet active');
-        }
-
-        if (payload.exp && Date.now() > payload.exp*1000) {
-            throw new Error('Token expired');
-        }
-
-        if (!_verify_intsig(payload, key, signingMethod, signingType, session_id, request.headers, request.querystring)) {
-            throw new Error('Internal signature verification failed');
-        }
     }
     pathArray.splice(1,1);
     return pathArray.join("/");
@@ -130,7 +41,7 @@ function validate_token(request, noVerify) {
 function handler(event) {
     var request = event.request;
     try{
-        request.uri = validate_token(request, true);
+        request.uri = validate_token(request);
         return request;
     }
     catch(e) {
