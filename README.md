@@ -9,7 +9,9 @@ Scripts are untested.
 
 ### Secure Token
 
-CloudFront function: [media_files_viewer_request.js](./media_files_viewer_request.js)
+CloudFront functions:
+* [master_manifest_viewer_request.js](./master_manifest_viewer_request.js)
+* [media_files_viewer_request.js](./media_files_viewer_request.js)
 
 #### Prepare CloudFront Function
 
