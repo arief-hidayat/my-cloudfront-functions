@@ -1,0 +1,40 @@
+title Request Flow 1
+
+
+FE ->+ BE: generate token
+note right of BE
+    use:
+    go-token-generator
+    or
+    py-token-generator
+
+    inputs
+    key (from DB?)
+    URL (from DB?)
+    expiry (from DB?)
+    user-agent (from http req)
+    referrer (from http req)
+
+    Questions:
+    how to sync key with CFF?
+    upon key CRUD to DB, update CFF
+end note
+BE ->- FE: https://cdn.com/my-token/master.m3u8
+FE ->+ CF: play https://cdn.com/my-token/master.m3u8
+note right of CF
+    CFF viewer request:
+    validate token expiry
+    and internal signature
+    (session, referer, & user-agent)
+end note
+
+opt cache missed
+    CF ->+ Origin:https://origin.com/master.m3u8
+    Origin ->- CF: content
+end
+CF ->- FE: content
+
+
+
+
+

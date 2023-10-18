@@ -130,7 +130,7 @@ function validate_token(request, noVerify) {
 function handler(event) {
     var request = event.request;
     try{
-        request.uri = validate_token(request, true);
+        request.uri = validate_token(request, false);
         return request;
     }
     catch(e) {
